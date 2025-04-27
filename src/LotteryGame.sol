@@ -11,29 +11,45 @@ contract LotteryGame {
         bool active;
     }
 
-    // TODO: Declare state variables
-    // - Mapping for player information
-    // - Array to track player addresses
-    // - Total prize pool
-    // - Array for winners
-    // - Array for previous winners
+    // State variables
+    mapping(address => Player) public players;
+    address[] public playerAddresses;
+    uint256 public totalPrize;
+    address[] public winners;
+    address[] public prevWinners;
+    uint256 public constant REGISTRATION_FEE = 0.02 ether;
+    uint256 public constant MAX_ATTEMPTS = 3;
 
-    // TODO: Declare events
-    // - PlayerRegistered
-    // - GuessResult
-    // - PrizesDistributed
+    // Events
+    event PlayerRegistered(address indexed player, uint256 stake);
+    event GuessResult(address indexed player, uint256 guess, uint256 randomNumber, bool isCorrect);
+    event PrizesDistributed(address[] winners, uint256 prizePerWinner);
 
     /**
      * @dev Register to play the game
      * Players must stake exactly 0.02 ETH to participate
      */
     function register() public payable {
-        // TODO: Implement registration logic
-        // - Verify correct payment amount
-        // - Add player to mapping
-        // - Add player address to array
-        // - Update total prize
-        // - Emit registration event
+        // Verify correct payment amount
+        require(msg.value == REGISTRATION_FEE, "Registration fee is 0.02 ETH");
+        
+        // Check player isn't already registered
+        require(!players[msg.sender].active, "Player already registered");
+        
+        // Add player to mapping
+        players[msg.sender] = Player({
+            attempts: MAX_ATTEMPTS,
+            active: true
+        });
+        
+        // Add player address to array
+        playerAddresses.push(msg.sender);
+        
+        // Update total prize
+        totalPrize += msg.value;
+        
+        // Emit registration event
+        emit PlayerRegistered(msg.sender, msg.value);
     }
 
     /**
@@ -41,26 +57,63 @@ contract LotteryGame {
      * @param guess The player's guess
      */
     function guessNumber(uint256 guess) public {
-        // TODO: Implement guessing logic
-        // - Validate guess is between 1 and 9
-        // - Check player is registered and has attempts left
-        // - Generate "random" number
-        // - Compare guess with random number
-        // - Update player attempts
-        // - Handle correct guesses
-        // - Emit appropriate event
+        // Validate guess is between 1 and 9
+        require(guess >= 1 && guess <= 9, "Guess must be between 1 and 9");
+        
+        // Check player is registered and has attempts left
+        require(players[msg.sender].active, "Player not registered");
+        require(players[msg.sender].attempts > 0, "No attempts left");
+        
+        // Generate "random" number
+        uint256 randomNumber = _generateRandomNumber();
+        
+        // Compare guess with random number
+        bool isCorrect = (guess == randomNumber);
+        
+        // Update player attempts
+        players[msg.sender].attempts--;
+        
+        // Handle correct guesses
+        if (isCorrect) {
+            winners.push(msg.sender);
+        }
+        
+        // Emit appropriate event
+        emit GuessResult(msg.sender, guess, randomNumber, isCorrect);
     }
 
     /**
      * @dev Distribute prizes to winners
      */
     function distributePrizes() public {
-        // TODO: Implement prize distribution logic
-        // - Calculate prize amount per winner
-        // - Transfer prizes to winners
-        // - Update previous winners list
-        // - Reset game state
-        // - Emit event
+        // Ensure there are winners and prize to distribute
+        require(winners.length > 0, "No winners");
+        require(totalPrize > 0, "No prize to distribute");
+        
+        // Calculate prize amount per winner
+        uint256 prizePerWinner = totalPrize / winners.length;
+        
+        // Transfer prizes to winners
+        for (uint256 i = 0; i < winners.length; i++) {
+            payable(winners[i]).transfer(prizePerWinner);
+        }
+        
+        // Update previous winners list
+        delete prevWinners;
+        prevWinners = winners;
+        
+        // Reset game state
+        delete winners;
+        totalPrize = 0;
+        
+        // Reset player data
+        for (uint256 i = 0; i < playerAddresses.length; i++) {
+            delete players[playerAddresses[i]];
+        }
+        delete playerAddresses;
+        
+        // Emit event
+        emit PrizesDistributed(prevWinners, prizePerWinner);
     }
 
     /**
@@ -68,7 +121,7 @@ contract LotteryGame {
      * @return Array of previous winner addresses
      */
     function getPrevWinners() public view returns (address[] memory) {
-        // TODO: Return previous winners array
+        return prevWinners;
     }
 
     /**
